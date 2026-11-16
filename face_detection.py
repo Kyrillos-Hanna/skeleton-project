@@ -3,10 +3,17 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import time
+import socket
+import struct
 cam = cv2.VideoCapture(0)
 
 def main():
-    model_path = "/Users/kyrohanna/Documents/blaze_face_full_range.tflite"
+    esp_ip = "192.168.4.1"
+    last_send = 0
+    interval = 0.5
+    esp_port = 12345
+    socket1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    model_path = "/Users/kyrohanna/Documents/skeleton-project/blaze_face_full_range.tflite"
 
     BaseOptions = mp.tasks.BaseOptions
     FaceDetector = mp.tasks.vision.FaceDetector
@@ -17,8 +24,15 @@ def main():
     with FaceDetector.create_from_options(options) as detector:
         while True:
             try:
-                x, y = get_face_position(detector)
-                print(f"X: {x}, Y: {y}")
+                if (time.monotonic() - last_send >= interval):
+                    last_send = time.monotonic()
+                    x, y = get_face_position(detector)
+                    data = struct.pack('<ii', x, y)
+                    try:
+                        socket1.sendto(data, (esp_ip, esp_port))
+                    except OSError:
+                        print("IP Address not found")
+                    print(f"X: {x}, Y: {y}")
             except TypeError:
                 pass
 
@@ -43,8 +57,9 @@ def get_face_position(detector):
                 largestArea = area
                 largestDetection = detection
         bbox = largestDetection.bounding_box
-        x = bbox.origin_x + bbox.width / 2
-        y = bbox.origin_y + bbox.height / 2
+        x = int(bbox.origin_x + bbox.width / 2)
+        y = int(bbox.origin_y + bbox.height / 2)
         return x, y
+    return -1, -1
 
 main()
